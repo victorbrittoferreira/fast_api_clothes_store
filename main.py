@@ -1,11 +1,15 @@
+
 import enum
+from datetime import datetime
+from typing import Optional
 
 import databases
 import sqlalchemy
 from decouple import config
+from email_validator import EmailNotValidError
+from email_validator import validate_email as validate_e
 from fastapi import FastAPI
 from pydantic import BaseModel, validator
-from email_validator import EmailNotValidError, validate_email as validate_e
 
 # from models import *
 
@@ -43,6 +47,7 @@ users = sqlalchemy.Table(
         onupdate=sqlalchemy.func.now(),
     ),
 )
+
 
 class ColorEnum(enum.Enum):
     pink = "pink"
@@ -83,8 +88,8 @@ clothes = sqlalchemy.Table(
     ),
 )
 
-class EmailField(str):
 
+class EmailField(str):
     @classmethod
     def __get_validators__(cls):
         yield cls.validate
@@ -98,11 +103,10 @@ class EmailField(str):
             raise ValueError("Email is not valid") from e
 
 
-
 class BaseUser(BaseModel):
     email: EmailField
     full_name: str
-      
+
     @validator("full_name")
     def validate_full_name(cls, value):
         try:
@@ -112,9 +116,15 @@ class BaseUser(BaseModel):
             raise ValueError("You should provide at least 2 names") from e
 
 
-
 class UserSingIn(BaseUser):
     password: str
+
+
+class UserSignOut(BaseUser):
+
+    phone: Optional[str]
+    created_at: datetime
+    last_modified_at: datetime
 
 
 app = FastAPI()
@@ -130,8 +140,11 @@ async def startup():
 async def shutdown():
     await database.disconnect()
 
-@app.post("/register/")
+
+@app.post("/register/", response_model= UserSignOut)
 async def create_user(user: UserSingIn):
     query = users.insert().values(**user.dict())
     id_ = await database.execute(query)
-    return "successfully registered"
+    created_user = await database.fetch_one(users.select().where(users.c.id == id_))
+
+    return created_user

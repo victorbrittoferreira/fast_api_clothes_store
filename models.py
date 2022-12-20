@@ -3,9 +3,10 @@ import enum
 import databases
 import sqlalchemy
 from decouple import config
+from email_validator import EmailNotValidError
+from email_validator import validate_email as validate_e
 from fastapi import FastAPI
 from pydantic import BaseModel, validator
-from email_validator import EmailNotValidError, validate_email as validate_e
 
 metadata = sqlalchemy.MetaData()
 
