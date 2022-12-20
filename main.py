@@ -7,7 +7,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel, validator
 from email_validator import EmailNotValidError, validate_email as validate_e
 
-#TEST
+# from models import *
+
 DATABASE_URL = (
     f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}"
     + f"@localhost:{config('DB_PORT')}/{config('DB_NAME')}"
@@ -82,23 +83,31 @@ clothes = sqlalchemy.Table(
     ),
 )
 
+class EmailField(str):
 
-class BaseUser(BaseModel):
-    email: str
-    full_name: str
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
 
-    @validator("email")
-    def validate_email(cls, value):
+    @classmethod
+    def validate(cls, value) -> str:
         try:
             validate_e(value)
             return value
         except EmailNotValidError as e:
             raise ValueError("Email is not valid") from e
-        
+
+
+
+class BaseUser(BaseModel):
+    email: EmailField
+    full_name: str
+      
     @validator("full_name")
     def validate_full_name(cls, value):
         try:
             first_name, last_name = value.split()
+            return value
         except Exception as e:
             raise ValueError("You should provide at least 2 names") from e
 
