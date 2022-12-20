@@ -14,6 +14,7 @@ database = databases.Database(DATABASE_URL)
 
 metadata = sqlalchemy.MetaData()
 
+
 # M O D E L
 
 users = sqlalchemy.Table(
@@ -80,6 +81,7 @@ clothes = sqlalchemy.Table(
 )
 
 app = FastAPI()
+
 
 # M I D D L E W A R E
 @app.on_event("startup")
