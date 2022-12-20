@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, validator
 from email_validator import EmailNotValidError, validate_email as validate_e
 
-
+#TEST
 DATABASE_URL = (
     f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}"
     + f"@localhost:{config('DB_PORT')}/{config('DB_NAME')}"
