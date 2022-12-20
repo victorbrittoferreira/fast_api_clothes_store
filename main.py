@@ -4,6 +4,9 @@ import databases
 import sqlalchemy
 from decouple import config
 from fastapi import FastAPI
+from pydantic import BaseModel, validator
+from email_validator import EmailNotValidError, validate_email as validate_e
+
 
 DATABASE_URL = (
     f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}"
@@ -39,7 +42,6 @@ users = sqlalchemy.Table(
         onupdate=sqlalchemy.func.now(),
     ),
 )
-
 
 class ColorEnum(enum.Enum):
     pink = "pink"
@@ -80,6 +82,32 @@ clothes = sqlalchemy.Table(
     ),
 )
 
+
+class BaseUser(BaseModel):
+    email: str
+    full_name: str
+
+    @validator("email")
+    def validate_email(cls, value):
+        try:
+            validate_e(value)
+            return value
+        except EmailNotValidError as e:
+            raise ValueError("Email is not valid") from e
+        
+    @validator("full_name")
+    def validate_full_name(cls, value):
+        try:
+            first_name, last_name = value.split()
+        except Exception as e:
+            raise ValueError("You should provide at least 2 names") from e
+
+
+
+class UserSingIn(BaseUser):
+    password: str
+
+
 app = FastAPI()
 
 
@@ -92,3 +120,9 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await database.disconnect()
+
+@app.post("/register/")
+async def create_user(user: UserSingIn):
+    query = users.insert().values(**user.dict())
+    id_ = await database.execute(query)
+    return "successfully registered"
