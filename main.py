@@ -1,8 +1,9 @@
 import enum
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import databases
+import jwt
 import sqlalchemy
 from decouple import config
 from email_validator import EmailNotValidError
@@ -129,6 +130,17 @@ app = FastAPI()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def create_access_token(user):
+    try:
+        payload = {
+            "sub": user["id"],
+            "exp": datetime.utcnow() + timedelta(minutes=120),
+        }
+        return jwt.encode(payload, config("JWT_SECRET"), algorithm="HS256")
+    except Exception as e:
+        raise e
+
+
 # M I D D L E W A R E
 @app.on_event("startup")
 async def startup():
@@ -140,11 +152,13 @@ async def shutdown():
     await database.disconnect()
 
 
-@app.post("/register/", response_model=UserSignOut)
+#@app.post("/register/", response_model=UserSignOut)
+@app.post("/register/", status_code=201)
 async def create_user(user: UserSingIn):
     user.password = pwd_context.hash(user.password)
     query = users.insert().values(**user.dict())
     id_ = await database.execute(query)
     created_user = await database.fetch_one(users.select().where(users.c.id == id_))
-
-    return created_user
+    token = create_access_token(created_user)
+#    return created_user
+    return {"token" : token}
