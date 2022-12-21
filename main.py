@@ -1,4 +1,3 @@
-
 import enum
 from datetime import datetime
 from typing import Optional
@@ -9,9 +8,8 @@ from decouple import config
 from email_validator import EmailNotValidError
 from email_validator import validate_email as validate_e
 from fastapi import FastAPI
+from passlib.context import CryptContext
 from pydantic import BaseModel, validator
-
-# from models import *
 
 DATABASE_URL = (
     f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}"
@@ -128,6 +126,7 @@ class UserSignOut(BaseUser):
 
 
 app = FastAPI()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # M I D D L E W A R E
@@ -141,8 +140,9 @@ async def shutdown():
     await database.disconnect()
 
 
-@app.post("/register/", response_model= UserSignOut)
+@app.post("/register/", response_model=UserSignOut)
 async def create_user(user: UserSingIn):
+    user.password = pwd_context.hash(user.password)
     query = users.insert().values(**user.dict())
     id_ = await database.execute(query)
     created_user = await database.fetch_one(users.select().where(users.c.id == id_))
