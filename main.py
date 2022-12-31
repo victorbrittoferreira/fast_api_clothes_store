@@ -9,11 +9,11 @@ from decouple import config
 from email_validator import EmailNotValidError
 from email_validator import validate_email as validate_e
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
 from pydantic import BaseModel, validator
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
 from starlette.requests import Request
+
 # SETTINGS
 
 DATABASE_URL = (
@@ -28,10 +28,12 @@ metadata = sqlalchemy.MetaData()
 
 # M O D E L
 
+
 class UserRole(enum.Enum):
     super_admin = "super_admin"
     admin = "admin"
     user = "user"
+
 
 users = sqlalchemy.Table(
     "users",
@@ -54,7 +56,12 @@ users = sqlalchemy.Table(
         server_default=sqlalchemy.func.now(),
         onupdate=sqlalchemy.func.now(),
     ),
-    sqlalchemy.Column("role", sqlalchemy.Enum(UserRole), nullable=False, server_dafault=UserRole.user.name)
+    sqlalchemy.Column(
+        "role",
+        sqlalchemy.Enum(UserRole),
+        nullable=False,
+        server_dafault=UserRole.user.name,
+    ),
 )
 
 
@@ -97,7 +104,26 @@ clothes = sqlalchemy.Table(
     ),
 )
 
-# VIEW
+
+class ClothesBase(BaseModel):
+    name: str
+    color: str
+    size: SizeEnum
+    color: ColorEnum
+
+
+class ClothesIn(ClothesBase):
+    ...
+
+
+class ClothesOut(ClothesBase):
+    id: int
+    created_at: datetime
+    last_modified_at: datetime
+
+
+# V I E W
+
 
 class EmailField(str):
     @classmethod
@@ -140,23 +166,31 @@ class UserSignOut(BaseUser):
 app = FastAPI()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 class CustomHTTPBearer(HTTPBearer):
-    async def __call__(self, request: Request) -> Optional[HTTPAuthorizationCredentials]:
+    async def __call__(
+        self, request: Request
+    ) -> Optional[HTTPAuthorizationCredentials]:
         res = await super().__call__(request)
 
         try:
-            payload = jwt.decode(res.credentials, config("JWT_SECRET"),algorithms=["HS256"])
-            user = await database.fetch_one(users.select().where(users.c.id == payload["sub"]))
+            payload = jwt.decode(
+                res.credentials, config("JWT_SECRET"), algorithms=["HS256"]
+            )
+            user = await database.fetch_one(
+                users.select().where(users.c.id == payload["sub"])
+            )
             request.state.user = user
             return payload
-        
+
         except jwt.ExpiredSignatureError:
             raise HTTPException(401, "Token is expired")
         except jwt.InvalidTokenError:
-            raise HTTPException (401, "Invalid token")
+            raise HTTPException(401, "Invalid token")
 
 
 oauth2_scheme = CustomHTTPBearer()
+
 
 def create_access_token(user):
     try:
@@ -167,11 +201,16 @@ def create_access_token(user):
         return jwt.encode(payload, config("JWT_SECRET"), algorithm="HS256")
     except Exception as e:
         raise e
-    
 
+
+async def is_admin(request: Request):
+    user = request.state.user
+    if not user or user["role"] not in (UserRole.admin, UserRole.super_admin):
+        raise HTTPException(403, "You do not have permissions for this resource")
 
 
 # M I D D L E W A R E
+
 
 @app.on_event("startup")
 async def startup():
@@ -183,12 +222,27 @@ async def shutdown():
     await database.disconnect()
 
 
-@app.get("/clotes/", dependencies=[Depends(oauth2_scheme)]) # protect acess with dependencies
+# E N D P O I N T
+
+
+@app.get(
+    "/clotes/", dependencies=[Depends(oauth2_scheme)]
+)  # protect acess with dependencies
 async def get_all_clothes():
     return await database.fetch_all(clothes.select())
 
 
-#@app.post("/register/", response_model=UserSignOut)
+@app.post(
+    "/clothes/",
+    response_model=ClothesOut,
+    dependencies=[Depends(oauth2_scheme), Depends(is_admin)],
+    status_code=201,
+)
+async def create_clothes(clothes_data: ClothesIn):
+    id_ = await database.execute(clothes.insert().values(**clothes_data.dict()))
+    return await database.fetch_one(clothes.select().where(clothes.c.id == id_))
+
+
 @app.post("/register/", status_code=201)
 async def create_user(user: UserSingIn):
     user.password = pwd_context.hash(user.password)
@@ -196,5 +250,5 @@ async def create_user(user: UserSingIn):
     id_ = await database.execute(query)
     created_user = await database.fetch_one(users.select().where(users.c.id == id_))
     token = create_access_token(created_user)
-#    return created_user
-    return {"token" : token}
+
+    return {"token": token}

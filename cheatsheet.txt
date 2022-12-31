@@ -9,3 +9,5 @@ alembic revision --autogenerate -m "tag/name"
 
 #Migrate
 alembic upgrade head
+
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjM2LCJleHAiOjE2NzI1Mjc1NTJ9.9Oh_5CSHdiddRpz8flNPYq0QtNhCb5mJkJ2EUqzadqc
