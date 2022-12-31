@@ -28,6 +28,11 @@ metadata = sqlalchemy.MetaData()
 
 # M O D E L
 
+class UserRole(enum.Enum):
+    super_admin = "super_admin"
+    admin = "admin"
+    user = "user"
+
 users = sqlalchemy.Table(
     "users",
     metadata,
@@ -49,6 +54,7 @@ users = sqlalchemy.Table(
         server_default=sqlalchemy.func.now(),
         onupdate=sqlalchemy.func.now(),
     ),
+    sqlalchemy.Column("role", sqlalchemy.Enum(UserRole), nullable=False, server_dafault=UserRole.user.name)
 )
 
 
