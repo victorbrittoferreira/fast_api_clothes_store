@@ -8,7 +8,7 @@ import sqlalchemy
 from decouple import config
 from email_validator import EmailNotValidError
 from email_validator import validate_email as validate_e
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from passlib.context import CryptContext
 from pydantic import BaseModel, validator
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -140,7 +140,7 @@ class CustomHTTPBearer(HTTPBearer):
 
         try:
             payload = jwt.decode(res.credentials, config("JWT_SECRET"),algorithms=["HS256"])
-            user = await database.fetch_one(users.select().where(user.c.id == payload["sub"]))
+            user = await database.fetch_one(users.select().where(users.c.id == payload["sub"]))
             request.state.user = user
             return payload
         
@@ -149,6 +149,8 @@ class CustomHTTPBearer(HTTPBearer):
         except jwt.InvalidTokenError:
             raise HTTPException (401, "Invalid token")
 
+
+oauth2_scheme = CustomHTTPBearer()
 
 def create_access_token(user):
     try:
@@ -173,6 +175,11 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await database.disconnect()
+
+
+@app.get("/clotes/", dependencies=[Depends(oauth2_scheme)]) # protect acess with dependencies
+async def get_all_clothes():
+    return await database.fetch_all(clothes.select())
 
 
 #@app.post("/register/", response_model=UserSignOut)
