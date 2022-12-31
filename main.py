@@ -8,9 +8,13 @@ import sqlalchemy
 from decouple import config
 from email_validator import EmailNotValidError
 from email_validator import validate_email as validate_e
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from passlib.context import CryptContext
 from pydantic import BaseModel, validator
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+from starlette.requests import Request
+# SETTINGS
 
 DATABASE_URL = (
     f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}"
@@ -87,6 +91,7 @@ clothes = sqlalchemy.Table(
     ),
 )
 
+# VIEW
 
 class EmailField(str):
     @classmethod
@@ -129,6 +134,21 @@ class UserSignOut(BaseUser):
 app = FastAPI()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+class CustomHTTPBearer(HTTPBearer):
+    async def __call__(self, request: Request) -> Optional[HTTPAuthorizationCredentials]:
+        res = await super().__call__(request)
+
+        try:
+            payload = jwt.decode(res.credentials, config("JWT_SECRET"),algorithms=["HS256"])
+            user = await database.fetch_one(users.select().where(user.c.id == payload["sub"]))
+            request.state.user = user
+            return payload
+        
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(401, "Token is expired")
+        except jwt.InvalidTokenError:
+            raise HTTPException (401, "Invalid token")
+
 
 def create_access_token(user):
     try:
@@ -139,9 +159,12 @@ def create_access_token(user):
         return jwt.encode(payload, config("JWT_SECRET"), algorithm="HS256")
     except Exception as e:
         raise e
+    
+
 
 
 # M I D D L E W A R E
+
 @app.on_event("startup")
 async def startup():
     await database.connect()
